@@ -1,10 +1,11 @@
-using FFTW
+# using FFTW
 using Plots
+using CUDA
+using CUDA.CUFFT
 
 """
 Create Your Own Navier-Stokes Spectral Method Simulation (With Julia)
-Ported from Python code by Philip Mocz (2023): https://github.com/pmocz/navier-stokes-spectral-python
-by Jeremy Rekier (2024), @jrekier
+Philip Mocz (2023), @PMocz
 
 Simulate the Navier-Stokes equations (incompressible viscous fluid) 
 with a Spectral method
@@ -13,6 +14,23 @@ v_t + (v.nabla) v = nu * nabla^2 v + nabla P
 div(v) = 0
 
 """
+
+function ifftshift(xx)
+    # Assuming x is a 2D CUDA array
+    nrows, ncols = size(xx)
+    
+    # Calculate midpoints
+    midrow = ceil(Int, nrows / 2)
+    midcol = ceil(Int, ncols / 2)
+    
+    # Shift rows
+    xx = CUDA.cat(xx[midrow+1:end, :], xx[1:midrow, :], dims=1)
+    
+    # Shift columns
+    xx = CUDA.cat(xx[:, midcol+1:end], xx[:, 1:midcol], dims=2)
+    
+    return xx
+end
 
 function poisson_solve(rho, kSq_inv)
     V_hat = -fft(rho) .* kSq_inv
@@ -51,6 +69,7 @@ function apply_dealias(f, dealias)
 end
 
 function main()
+    CUDA.allowscalar(false) # Prevent scalar operations on GPU for performance
     N = 400
     t = 0.0
     dt = 0.001
@@ -61,14 +80,15 @@ function main()
     
     L = 1.0
     xlin = LinRange(0, L, N+1)[1:end-1]  # chop off periodic point
-    xx, yy = repeat(xlin', N, 1), repeat(xlin, 1, N)
+    xx, yy = CUDA.cu(repeat(xlin', N, 1)), CUDA.cu(repeat(xlin, 1, N))
     
-    vx = -sin.(2pi * yy)
-    vy = sin.(2pi * xx * 2)
+    vx = -CUDA.sin.(2pi * yy)
+    vy = CUDA.sin.(2pi * xx * 2)
     
-    klin = 2.0 * pi / L * collect(-N/2:N/2-1)
-    kmax = maximum(klin)
-    kx, ky = repeat(klin', N, 1), repeat(klin, 1, N)
+    klin = 2.0 * pi / L * CUDA.cu(collect(-N/2:N/2-1))
+    kmax = CUDA.maximum(klin)
+    kx = CUDA.broadcast(*, CUDA.reshape(klin, (1, N)), CUDA.ones(Int32, N, 1))
+    ky = CUDA.broadcast(*, CUDA.reshape(klin, (N, 1)), CUDA.ones(Int32, 1, N))
     kx = ifftshift(kx)
     ky = ifftshift(ky)
     kSq = kx.^2 + ky.^2
@@ -106,6 +126,8 @@ function main()
         
         wz = curl(vx, vy, kx, ky)
         # println(wz)
+
+        # wz_cpu = Array(wz)
         
         t += dt
         println(t)
@@ -117,7 +139,7 @@ function main()
         end
 
         if (plotRealTime && plotThisTurn) || (i == Nt)
-            plt = heatmap(xlin, xlin, wz, cmap=:RdBu, clim=(-20, 20), aspect_ratio=:equal, framestyle=:box)
+            plt = heatmap(xlin, xlin, Array(wz), cmap=:RdBu, clim=(-20, 20), aspect_ratio=:equal, framestyle=:box)
             plot!(legend=false)
             plot!(xticks=[], yticks=[])
             plot!(colorbar=false)
@@ -125,7 +147,7 @@ function main()
             outputCount += 1
         end
     end
-    savefig(plt, "navier-stokes-spectral.png")
+    # savefig(plt, "navier-stokes-spectral.png")
     return 0
 end
 
