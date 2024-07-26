@@ -1,11 +1,11 @@
-# using FFTW
 using Plots
 using CUDA
 using CUDA.CUFFT
 
 """
 Create Your Own Navier-Stokes Spectral Method Simulation (With Julia)
-Philip Mocz (2023), @PMocz
+Ported from Python code by Philip Mocz (2023): https://github.com/pmocz/navier-stokes-spectral-python
+by Jeremy Rekier (2024), @jrekier
 
 Simulate the Navier-Stokes equations (incompressible viscous fluid) 
 with a Spectral method
@@ -70,7 +70,7 @@ end
 
 function main()
     CUDA.allowscalar(false) # Prevent scalar operations on GPU for performance
-    N = 400
+    N = 512
     t = 0.0
     dt = 0.001
     tOut = 0.01
@@ -125,9 +125,6 @@ function main()
         vy = diffusion_solve(vy, dt, nu, kSq)
         
         wz = curl(vx, vy, kx, ky)
-        # println(wz)
-
-        # wz_cpu = Array(wz)
         
         t += dt
         println(t)
@@ -147,7 +144,7 @@ function main()
             outputCount += 1
         end
     end
-    # savefig(plt, "navier-stokes-spectral.png")
+    savefig(plt, "navier-stokes-spectral.png")
     return 0
 end
 
