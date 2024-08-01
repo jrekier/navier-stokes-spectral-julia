@@ -1,7 +1,6 @@
 using CUDA
 using CUDA.CUFFT
 using Plots
-
 using HDF5
 
 """
@@ -148,8 +147,8 @@ function make_gif(file_name::String, arrays::Array{Array{Float64, 2}})
     gif(anim, file_name, fps=20)
 end
 
-function main(tEnd::Float64, tOut::Float64)
-    N = 256
+function main(tEnd::Float64, tOut::Float64, file_name::String)
+    N = 512
     L = 1.0
 
     nu = 0.001
@@ -169,9 +168,9 @@ function main(tEnd::Float64, tOut::Float64)
     ])
     
     t = 0.0 
-    init_outfile("out.h5")
+    init_outfile(filename)
     wz = curl(vx, vy, params)
-    save2file("out.h5", Array(wz), t)
+    save2file(filename, Array(wz), t)
     outputCount = 1
 
     while t<tEnd
@@ -181,7 +180,7 @@ function main(tEnd::Float64, tOut::Float64)
         # Periodic output
         if t >= outputCount * tOut || t >= tEnd
             wz = curl(vx, vy, params)
-            save2file("out.h5", Array(wz), t)
+            save2file(filename, Array(wz), t)
             outputCount += 1
         end
 
@@ -203,6 +202,6 @@ function main(tEnd::Float64, tOut::Float64)
 
 end
 
-main(1.0, 0.01)
-arrays = readfile("out.h5")
-make_gif("out.gif", arrays)
+# main(1.0, 0.01, "out.h5")
+# arrays = readfile("out.h5")
+# make_gif("out.gif", arrays)
